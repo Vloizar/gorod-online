@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'auth_service.dart';
+
 void main() {
   runApp(const GorodOnlineApp());
 }
@@ -22,7 +24,8 @@ class GorodOnlineApp extends StatelessWidget {
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.authService});
+  final AuthService? authService;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -32,18 +35,43 @@ class _LoginPageState extends State<LoginPage> {
   final phoneController = TextEditingController();
   final passwordController = TextEditingController();
 
-  void login() {
+  late final AuthService auth = widget.authService ?? AuthService();
+  bool loading = false;
+
+  Future<void> login() async {
+    if (loading) return;
     if (phoneController.text.trim().isEmpty ||
         passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите номер телефона и пароль')),
-      );
+      showMessage('Введите номер телефона и пароль');
       return;
     }
+    setState(() => loading = true);
+    try {
+      await auth.login(phoneController.text, passwordController.text);
+      if (!mounted) return;
+      passwordController.clear();
+      showMessage('Вход выполнен');
+    } on LoginException catch (error) {
+      if (mounted) showMessage(error.message);
+    } catch (_) {
+      if (mounted) showMessage('Не удалось выполнить вход. Попробуйте ещё раз');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Подключение к серверу будет добавлено позже')),
-    );
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    passwordController.dispose();
+    if (widget.authService == null) auth.close();
+    super.dispose();
   }
 
   @override
@@ -73,6 +101,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 32),
                   TextField(
                     controller: phoneController,
+                    enabled: !loading,
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Номер телефона',
@@ -83,6 +112,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: passwordController,
+                    enabled: !loading,
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'Пароль',
@@ -92,10 +122,16 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: login,
-                    child: const Padding(
+                    onPressed: loading ? null : login,
+                    child: Padding(
                       padding: EdgeInsets.all(14),
-                      child: Text('Войти'),
+                      child: loading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Войти'),
                     ),
                   ),
                   TextButton(
