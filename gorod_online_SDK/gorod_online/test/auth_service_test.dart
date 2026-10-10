@@ -101,8 +101,14 @@ void main() {
             );
           }
           expect(request.method, 'POST');
-          expect(request.url.path, '/api/companies/join');
           expect(jsonDecode(request.body), {'code': '123456'});
+          if (request.url.path == '/api/companies/invitation-preview') {
+            return utf8Response(
+              '{"company":{"name":"Тёплый угол"},"stores":[],"accepting_members":true}',
+              200,
+            );
+          }
+          expect(request.url.path, '/api/companies/join');
           return utf8Response(
             '{"already_member":false,"welcome_bonus":25,"membership":{"company":{"name":"Тёплый угол"}}}',
             201,
@@ -111,6 +117,10 @@ void main() {
       );
 
       expect((await auth.companyMemberships()).single['bonus_balance'], 5);
+      expect(
+        (await auth.companyInvitationPreview('123456'))['accepting_members'],
+        isTrue,
+      );
       expect((await auth.joinCompany(' 123456 '))['welcome_bonus'], 25);
     },
   );

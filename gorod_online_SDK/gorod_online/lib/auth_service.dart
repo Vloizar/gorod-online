@@ -313,46 +313,34 @@ class AuthService {
     return data.cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> joinCompany(String code) async {
-    final token = await tokens.read();
-    if (token == null) {
+  Future<Map<String, dynamic>> companyInvitationPreview(String code) async {
+    final response = await _postAuthenticated(
+      '/api/companies/invitation-preview',
+      {'code': code.trim()},
+    );
+    if (response.statusCode == 401) {
       throw const LoginException('Сеанс завершён. Войдите снова');
     }
-    late http.Response response;
-    try {
-      response = await client
-          .post(
-            _endpoint('/api/companies/join'),
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode({'code': code.trim()}),
-          )
-          .timeout(timeout);
-    } on TimeoutException {
-      throw const LoginException('Сервер не ответил. Попробуйте ещё раз');
-    } on http.ClientException {
-      throw const LoginException('Нет подключения к Интернету');
+    if (response.statusCode == 404 || response.statusCode == 422) {
+      throw LoginException(_validationMessage(response.body));
     }
+    if (response.statusCode != 200) {
+      throw const LoginException(
+        'Не удалось открыть приглашение. Попробуйте позже',
+      );
+    }
+    return _decodeMap(response.body);
+  }
+
+  Future<Map<String, dynamic>> joinCompany(String code) async {
+    final response = await _postAuthenticated('/api/companies/join', {
+      'code': code.trim(),
+    });
     if (response.statusCode == 401) {
       throw const LoginException('Сеанс завершён. Войдите снова');
     }
     if (response.statusCode == 422) {
-      String message = 'Проверьте код и попробуйте ещё раз';
-      try {
-        final body = _decodeMap(response.body);
-        final errors = body['errors'];
-        if (errors is Map &&
-            errors['code'] is List &&
-            (errors['code'] as List).isNotEmpty) {
-          message = (errors['code'] as List).first.toString();
-        } else if (body['message'] is String) {
-          message = body['message'] as String;
-        }
-      } catch (_) {}
-      throw LoginException(message);
+      throw LoginException(_validationMessage(response.body));
     }
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw const LoginException(
@@ -360,6 +348,47 @@ class AuthService {
       );
     }
     return _decodeMap(response.body);
+  }
+
+  Future<http.Response> _postAuthenticated(
+    String path,
+    Map<String, dynamic> payload,
+  ) async {
+    final token = await tokens.read();
+    if (token == null) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    try {
+      return await client
+          .post(
+            _endpoint(path),
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const LoginException('Сервер не ответил. Попробуйте ещё раз');
+    } on http.ClientException {
+      throw const LoginException('Нет подключения к Интернету');
+    }
+  }
+
+  String _validationMessage(String responseBody) {
+    try {
+      final body = _decodeMap(responseBody);
+      final errors = body['errors'];
+      if (errors is Map &&
+          errors['code'] is List &&
+          (errors['code'] as List).isNotEmpty) {
+        return (errors['code'] as List).first.toString();
+      }
+      if (body['message'] is String) return body['message'] as String;
+    } catch (_) {}
+    return 'Проверьте код и попробуйте ещё раз';
   }
 
   Future<void> deleteAccount() async {

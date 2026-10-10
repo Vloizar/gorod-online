@@ -24,5 +24,6 @@ Route::get('/user', function (Request $request) {
 Route::delete('/user', DeleteAccountController::class)->middleware('auth:sanctum')->name('user.delete');
 Route::middleware('auth:sanctum')->prefix('companies')->name('companies.')->group(function (): void {
     Route::get('/memberships', [CompanyMembershipController::class, 'index'])->name('memberships.index');
+    Route::post('/invitation-preview', [CompanyMembershipController::class, 'preview'])->middleware('throttle:30,1')->name('invitation-preview');
     Route::post('/join', [CompanyMembershipController::class, 'join'])->middleware('throttle:30,1')->name('memberships.join');
 });

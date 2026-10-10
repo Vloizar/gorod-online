@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'accepting_members', 'welcome_bonus'])]
+#[Fillable(['name', 'accepting_members', 'welcome_bonus', 'short_description', 'description'])]
 class Company extends Model
 {
     protected function casts(): array
@@ -24,5 +24,11 @@ class Company extends Model
     public function entryCodes(): HasMany
     {
         return $this->hasMany(CompanyEntryCode::class);
+    }
+
+    /** @return HasMany<CompanyStore, $this> */
+    public function stores(): HasMany
+    {
+        return $this->hasMany(CompanyStore::class);
     }
 }

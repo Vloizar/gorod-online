@@ -12,6 +12,78 @@ use Illuminate\Validation\ValidationException;
 
 class CompanyMembershipController extends Controller
 {
+    public function preview(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'code' => ['required', 'string', 'min:4', 'max:32'],
+        ]);
+        $codeValue = mb_strtoupper(trim($data['code']), 'UTF-8');
+        $entryCode = CompanyEntryCode::query()
+            ->with(['company', 'inviter:id,name', 'city:id,region_name,district_name,name'])
+            ->where('code', $codeValue)
+            ->first();
+
+        if ($entryCode === null || ! $entryCode->active) {
+            return response()->json([
+                'message' => 'Не удалось найти действующий код компании. Проверьте код и попробуйте ещё раз.',
+            ], 404);
+        }
+
+        $company = $entryCode->company;
+        if (! in_array($entryCode->source_type, ['friend', 'store'], true)) {
+            return response()->json(['message' => 'Это приглашение больше недоступно.'], 404);
+        }
+        if ($entryCode->source_type === 'friend' && ($entryCode->inviter_user_id === null || ! CompanyMembership::query()
+            ->where('company_id', $company->id)
+            ->where('user_id', $entryCode->inviter_user_id)
+            ->exists())) {
+            return response()->json(['message' => 'Это приглашение больше недоступно.'], 404);
+        }
+        $company->load(['stores' => function ($query): void {
+            $query->where('status', 'active')
+                ->whereNull('archived_at')
+                ->with('city:id,region_name,district_name,name')
+                ->orderBy('city_id')
+                ->orderBy('id');
+        }]);
+        $stores = $company->stores;
+
+        return response()->json([
+            'company' => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'short_description' => $company->short_description,
+                'description' => $company->description,
+            ],
+            'invited_by' => $entryCode->inviter?->name,
+            'invitation_city' => $entryCode->city === null ? null : [
+                'id' => $entryCode->city->id,
+                'name' => $entryCode->city->display_name,
+            ],
+            'has_stores_in_user_city' => $stores->contains('city_id', $request->user()->city_id),
+            'accepting_members' => $company->accepting_members && $stores->isNotEmpty(),
+            'already_member' => CompanyMembership::query()
+                ->where('company_id', $company->id)
+                ->where('user_id', $request->user()->id)
+                ->exists(),
+            'stores' => $stores->map(fn ($store): array => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'address' => $store->address,
+                'phone' => $store->phone,
+                'work_schedule' => $store->work_schedule,
+                'photos' => array_slice($store->photos ?? [], 0, 5),
+                'latitude' => $store->latitude,
+                'longitude' => $store->longitude,
+                'city' => [
+                    'id' => $store->city->id,
+                    'name' => $store->city->display_name,
+                ],
+                'invitation_city' => $entryCode->city_id === $store->city_id,
+            ])->values(),
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $memberships = CompanyMembership::query()
@@ -33,7 +105,7 @@ class CompanyMembershipController extends Controller
 
         $result = DB::transaction(function () use ($request, $codeValue): array {
             $entryCode = CompanyEntryCode::query()
-                ->whereRaw('upper(code) = ?', [$codeValue])
+                ->where('code', $codeValue)
                 ->lockForUpdate()
                 ->first();
 
@@ -46,12 +118,6 @@ class CompanyMembershipController extends Controller
             $company = $entryCode->company()->lockForUpdate()->firstOrFail();
             $user = $request->user();
 
-            if (! $company->accepting_members) {
-                throw ValidationException::withMessages([
-                    'code' => ['Компания временно не принимает новых участников.'],
-                ]);
-            }
-
             $existing = CompanyMembership::query()
                 ->where('company_id', $company->id)
                 ->where('user_id', $user->id)
@@ -59,6 +125,23 @@ class CompanyMembershipController extends Controller
 
             if ($existing !== null) {
                 return ['membership' => $existing->load(['company:id,name', 'inviter:id,name']), 'already_member' => true, 'welcome_bonus' => 0];
+            }
+
+            if (! in_array($entryCode->source_type, ['friend', 'store'], true)) {
+                throw ValidationException::withMessages([
+                    'code' => ['Это приглашение больше недоступно.'],
+                ]);
+            }
+
+            $hasActiveStores = $company->stores()
+                ->where('status', 'active')
+                ->whereNull('archived_at')
+                ->exists();
+
+            if (! $company->accepting_members || ! $hasActiveStores) {
+                throw ValidationException::withMessages([
+                    'code' => ['Компания временно не принимает новых участников.'],
+                ]);
             }
 
             if ($entryCode->inviter_user_id === $user->id) {
@@ -79,6 +162,10 @@ class CompanyMembershipController extends Controller
                         'code' => ['Приглашение больше недоступно. Попросите друга прислать новый код.'],
                     ]);
                 }
+            } elseif ($entryCode->source_type === 'friend') {
+                throw ValidationException::withMessages([
+                    'code' => ['Приглашение больше недоступно. Попросите друга прислать новый код.'],
+                ]);
             }
 
             $membership = CompanyMembership::create([
