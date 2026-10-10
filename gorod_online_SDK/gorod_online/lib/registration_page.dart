@@ -120,6 +120,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (!mounted) return;
       showMessage('Регистрация завершена');
       Navigator.of(context).pop();
+    } on ConsentChangedException {
+      try {
+        final updatedDocument = await widget.authService.personalDataConsent();
+        if (!mounted) return;
+        setState(() {
+          consent = updatedDocument;
+          consentAccepted = false;
+        });
+        await showConsent();
+        if (mounted) {
+          showMessage(
+            'Прочитайте обновлённое согласие и подтвердите его, чтобы продолжить регистрацию',
+          );
+        }
+      } on LoginException catch (error) {
+        if (mounted) showMessage(error.message);
+      } catch (_) {
+        if (mounted) {
+          showMessage('Не удалось загрузить обновлённое согласие');
+        }
+      }
     } on LoginException catch (error) {
       if (mounted) showMessage(error.message);
     } catch (_) {

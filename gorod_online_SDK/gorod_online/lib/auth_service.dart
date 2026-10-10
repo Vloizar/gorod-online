@@ -28,6 +28,11 @@ class LoginException implements Exception {
   const LoginException(this.message);
 }
 
+class ConsentChangedException extends LoginException {
+  const ConsentChangedException()
+    : super('Текст согласия обновился. Загрузили актуальную редакцию.');
+}
+
 class RegistrationCity {
   final int id;
   final String displayName;
@@ -201,9 +206,7 @@ class AuthService {
       throw const LoginException('Не удалось подключиться к серверу');
     }
     if (response.statusCode == 409) {
-      throw const LoginException(
-        'Текст согласия обновился. Откройте его ещё раз',
-      );
+      throw const ConsentChangedException();
     }
     if (response.statusCode != 201) {
       throw LoginException(_messageFor(response.statusCode));

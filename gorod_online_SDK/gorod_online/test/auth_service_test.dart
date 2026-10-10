@@ -84,6 +84,28 @@ void main() {
       expect(tokens.token, isNull);
     },
   );
+  test('identifies a changed consent so registration can refresh it', () async {
+    final auth = AuthService(
+      baseUrl: 'https://example.test',
+      client: MockClient((_) async => http.Response('{}', 409)),
+    );
+
+    await expectLater(
+      auth.register(
+        name: 'Андрей',
+        phone: '+79900000001',
+        cityId: 7,
+        password: 'secure-password',
+        recoveryCode: '1234',
+        consent: const ConsentDocument(
+          version: '1.0',
+          content: 'Old consent',
+          sha256: 'old-hash',
+        ),
+      ),
+      throwsA(isA<ConsentChangedException>()),
+    );
+  });
   test('loads open registration cities and the current consent document', () async {
     final auth = AuthService(
       baseUrl: 'https://example.test/',
