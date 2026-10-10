@@ -24,6 +24,25 @@ class LoginException implements Exception {
   const LoginException(this.message);
 }
 
+class RegistrationCity {
+  final int id;
+  final String displayName;
+
+  const RegistrationCity({required this.id, required this.displayName});
+}
+
+class ConsentDocument {
+  final String version;
+  final String content;
+  final String sha256;
+
+  const ConsentDocument({
+    required this.version,
+    required this.content,
+    required this.sha256,
+  });
+}
+
 class AuthService {
   final http.Client client;
   final TokenStore tokens;
@@ -98,6 +117,146 @@ class AuthService {
       );
     }
   }
+
+  Future<List<RegistrationCity>> registrationCities() async {
+    final response = await _get('/api/cities');
+    if (response.statusCode != 200) {
+      throw LoginException(_messageFor(response.statusCode));
+    }
+    final data = _decodeMap(response.body);
+    final items = data['data'];
+    if (items is! List)
+      throw const LoginException('Некорректный ответ сервера');
+    return items
+        .map((item) {
+          if (item is! Map<String, dynamic> ||
+              item['id'] is! int ||
+              item['display_name'] is! String) {
+            throw const LoginException('Некорректный ответ сервера');
+          }
+          return RegistrationCity(
+            id: item['id'] as int,
+            displayName: item['display_name'] as String,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  Future<ConsentDocument> personalDataConsent() async {
+    final response = await _get('/api/legal/personal-data-consent');
+    if (response.statusCode != 200) {
+      throw LoginException(_messageFor(response.statusCode));
+    }
+    final data = _decodeMap(response.body);
+    if (data['version'] is! String ||
+        data['content'] is! String ||
+        data['sha256'] is! String) {
+      throw const LoginException('Некорректный ответ сервера');
+    }
+    return ConsentDocument(
+      version: data['version'] as String,
+      content: data['content'] as String,
+      sha256: data['sha256'] as String,
+    );
+  }
+
+  Future<void> register({
+    required String name,
+    required String phone,
+    required int cityId,
+    required String password,
+    required String recoveryCode,
+    required ConsentDocument consent,
+  }) async {
+    final endpoint = _endpoint('/api/register');
+    late http.Response response;
+    try {
+      response = await client
+          .post(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'name': name.trim(),
+              'phone': phone.trim(),
+              'city_id': cityId,
+              'password': password,
+              'password_confirmation': password,
+              'recovery_code': recoveryCode,
+              'accepts_personal_data_consent': true,
+              'consent_version': consent.version,
+              'consent_sha256': consent.sha256,
+            }),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const LoginException('Сервер не ответил. Попробуйте ещё раз');
+    } on http.ClientException {
+      throw const LoginException('Не удалось подключиться к серверу');
+    }
+    if (response.statusCode == 409) {
+      throw const LoginException(
+        'Текст согласия обновился. Откройте его ещё раз',
+      );
+    }
+    if (response.statusCode != 201) {
+      throw LoginException(_messageFor(response.statusCode));
+    }
+    final data = _decodeMap(response.body);
+    if (data['token'] is! String || data['token_type'] != 'Bearer') {
+      throw const LoginException('Некорректный ответ сервера');
+    }
+    try {
+      await tokens.save(data['token'] as String);
+    } catch (_) {
+      throw const LoginException(
+        'Не удалось сохранить вход. Попробуйте ещё раз',
+      );
+    }
+  }
+
+  Future<http.Response> _get(String path) async {
+    final response = await client
+        .get(_endpoint(path), headers: {'Accept': 'application/json'})
+        .timeout(timeout);
+    return response;
+  }
+
+  Uri _endpoint(String path) {
+    final base = Uri.tryParse(baseUrl);
+    if (base == null ||
+        !base.hasAuthority ||
+        !['https', 'http'].contains(base.scheme) ||
+        base.hasQuery ||
+        base.hasFragment) {
+      throw const LoginException('Не настроен адрес сервера');
+    }
+    return base.replace(
+      path: '${base.path.replaceFirst(RegExp(r"/+$"), "")}$path',
+    );
+  }
+
+  Map<String, dynamic> _decodeMap(String body) {
+    dynamic data;
+    try {
+      data = jsonDecode(body);
+    } on FormatException {
+      throw const LoginException('Некорректный ответ сервера');
+    }
+    if (data is! Map<String, dynamic>) {
+      throw const LoginException('Некорректный ответ сервера');
+    }
+    return data;
+  }
+
+  String _messageFor(int statusCode) => switch (statusCode) {
+    503 => 'Регистрация временно недоступна. Попробуйте позже',
+    422 => 'Проверьте заполненные данные',
+    429 => 'Слишком много попыток. Попробуйте позже',
+    _ => 'Ошибка сервера. Попробуйте позже',
+  };
 
   Future<Map<String, String>> authorizationHeaders() async {
     final token = await tokens.read();

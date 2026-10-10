@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Models\User;
+use App\Support\RecoveryCodeHasher;
 use Illuminate\Http\JsonResponse;
 
 class ResetPasswordController extends Controller
@@ -13,9 +14,7 @@ class ResetPasswordController extends Controller
     {
         $data = $request->validated();
         $user = User::where('phone', $data['phone'])->first();
-        $submittedCodeHash = hash_hmac('sha256', $data['recovery_code'], config('app.key'));
-
-        if ($user === null || $user->recovery_code_hash === null || ! hash_equals($user->recovery_code_hash, $submittedCodeHash)) {
+        if ($user === null || $user->recovery_code_hash === null || ! RecoveryCodeHasher::matches($data['recovery_code'], $user->recovery_code_hash)) {
             return response()->json(['message' => 'Invalid phone number or recovery code.'], 401);
         }
 

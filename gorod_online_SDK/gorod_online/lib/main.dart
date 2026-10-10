@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'registration_page.dart';
 
 void main() {
   runApp(const GorodOnlineApp());
@@ -137,6 +138,17 @@ class _LoginPageState extends State<LoginPage> {
                   TextButton(
                     onPressed: () {},
                     child: const Text('Забыли пароль?'),
+                  ),
+                  TextButton(
+                    onPressed: loading
+                        ? null
+                        : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  RegistrationPage(authService: auth),
+                            ),
+                          ),
+                    child: const Text('Создать аккаунт'),
                   ),
                   OutlinedButton(
                     onPressed: () {},

@@ -45,6 +45,70 @@ void main() {
       'Authorization': 'Bearer test-token',
     });
   });
+  test('loads open registration cities and the current consent document', () async {
+    final auth = AuthService(
+      baseUrl: 'https://example.test/',
+      client: MockClient((request) async {
+        if (request.url.path == '/api/cities') {
+          return http.Response(
+            '{"data":[{"id":7,"display_name":"Мостовской, Мостовской район"}]}',
+            200,
+          );
+        }
+        return http.Response(
+          '{"version":"1.0","content":"Consent text","sha256":"abc"}',
+          200,
+        );
+      }),
+    );
+    expect(
+      (await auth.registrationCities()).single.displayName,
+      'Мостовской, Мостовской район',
+    );
+    expect((await auth.personalDataConsent()).content, 'Consent text');
+  });
+  test(
+    'registers using explicit consent details and persists the token',
+    () async {
+      final tokens = MemoryTokens();
+      final auth = AuthService(
+        baseUrl: 'https://example.test',
+        tokens: tokens,
+        client: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/register');
+          expect(jsonDecode(request.body), {
+            'name': 'Андрей',
+            'phone': '+79900000001',
+            'city_id': 7,
+            'password': 'secure-password',
+            'password_confirmation': 'secure-password',
+            'recovery_code': '1234',
+            'accepts_personal_data_consent': true,
+            'consent_version': '1.0',
+            'consent_sha256': 'abc',
+          });
+          return http.Response(
+            '{"token":"new-token","token_type":"Bearer"}',
+            201,
+          );
+        }),
+      );
+      await auth.register(
+        name: 'Андрей',
+        phone: '+79900000001',
+        cityId: 7,
+        password: 'secure-password',
+        recoveryCode: '1234',
+        consent: const ConsentDocument(
+          version: '1.0',
+          content: 'Consent',
+          sha256: 'abc',
+        ),
+      );
+      expect(tokens.token, 'new-token');
+    },
+  );
   for (final status in [401, 422, 429, 500]) {
     test('handles HTTP $status without saving token', () async {
       final tokens = MemoryTokens();
