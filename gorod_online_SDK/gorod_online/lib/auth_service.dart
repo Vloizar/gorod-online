@@ -295,6 +295,73 @@ class AuthService {
     return _decodeMap(response.body);
   }
 
+  Future<List<Map<String, dynamic>>> companyMemberships() async {
+    final response = await _get(
+      '/api/companies/memberships',
+      authenticated: true,
+    );
+    if (response.statusCode == 401) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    if (response.statusCode != 200) {
+      throw const LoginException('Не удалось загрузить список компаний');
+    }
+    final data = _decodeMap(response.body)['data'];
+    if (data is! List || data.any((item) => item is! Map<String, dynamic>)) {
+      throw const LoginException('Некорректный ответ сервера');
+    }
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> joinCompany(String code) async {
+    final token = await tokens.read();
+    if (token == null) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    late http.Response response;
+    try {
+      response = await client
+          .post(
+            _endpoint('/api/companies/join'),
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'code': code.trim()}),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const LoginException('Сервер не ответил. Попробуйте ещё раз');
+    } on http.ClientException {
+      throw const LoginException('Нет подключения к Интернету');
+    }
+    if (response.statusCode == 401) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    if (response.statusCode == 422) {
+      String message = 'Проверьте код и попробуйте ещё раз';
+      try {
+        final body = _decodeMap(response.body);
+        final errors = body['errors'];
+        if (errors is Map &&
+            errors['code'] is List &&
+            (errors['code'] as List).isNotEmpty) {
+          message = (errors['code'] as List).first.toString();
+        } else if (body['message'] is String) {
+          message = body['message'] as String;
+        }
+      } catch (_) {}
+      throw LoginException(message);
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw const LoginException(
+        'Не удалось подключить компанию. Попробуйте позже',
+      );
+    }
+    return _decodeMap(response.body);
+  }
+
   Future<void> deleteAccount() async {
     final token = await tokens.read();
     if (token == null) {

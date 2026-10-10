@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'company_discounts_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key, required this.authService});
@@ -135,6 +136,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                 (city['display_name'] as String?) ??
                                 (city['name'] as String? ?? '—'),
                           ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CompanyDiscountsPage(
+                                authService: widget.authService,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.local_offer_outlined),
+                          label: const Text('Мои дисконты компаний'),
+                        ),
                       ],
                     ),
                   ),

@@ -84,6 +84,36 @@ void main() {
       expect(tokens.token, isNull);
     },
   );
+  test(
+    'loads company memberships and joins a company with the member token',
+    () async {
+      final tokens = MemoryTokens()..token = 'member-token';
+      final auth = AuthService(
+        baseUrl: 'https://example.test',
+        tokens: tokens,
+        client: MockClient((request) async {
+          expect(request.headers['Authorization'], 'Bearer member-token');
+          if (request.method == 'GET') {
+            expect(request.url.path, '/api/companies/memberships');
+            return utf8Response(
+              '{"data":[{"company":{"name":"Тёплый угол"},"bonus_balance":5}]}',
+              200,
+            );
+          }
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/companies/join');
+          expect(jsonDecode(request.body), {'code': '123456'});
+          return utf8Response(
+            '{"already_member":false,"welcome_bonus":25,"membership":{"company":{"name":"Тёплый угол"}}}',
+            201,
+          );
+        }),
+      );
+
+      expect((await auth.companyMemberships()).single['bonus_balance'], 5);
+      expect((await auth.joinCompany(' 123456 '))['welcome_bonus'], 25);
+    },
+  );
   test('identifies a changed consent so registration can refresh it', () async {
     final auth = AuthService(
       baseUrl: 'https://example.test',
