@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'password_reset_page.dart';
 import 'profile_page.dart';
 import 'registration_page.dart';
 
@@ -139,7 +140,22 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: loading
+                        ? null
+                        : () async {
+                            final changed = await Navigator.of(context)
+                                .push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        PasswordResetPage(authService: auth),
+                                  ),
+                                );
+                            if (mounted && changed == true) {
+                              showMessage(
+                                'Пароль изменён. Войдите с новым паролем',
+                              );
+                            }
+                          },
                     child: const Text('Забыли пароль?'),
                   ),
                   TextButton(

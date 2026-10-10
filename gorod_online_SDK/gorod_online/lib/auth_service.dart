@@ -224,6 +224,52 @@ class AuthService {
     }
   }
 
+  Future<void> resetPassword({
+    required String phone,
+    required String recoveryCode,
+    required String password,
+  }) async {
+    final endpoint = _endpoint('/api/password/reset');
+    late http.Response response;
+    try {
+      response = await client
+          .post(
+            endpoint,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'phone': phone.trim(),
+              'recovery_code': recoveryCode,
+              'password': password,
+              'password_confirmation': password,
+            }),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const LoginException('Сервер не ответил. Попробуйте ещё раз');
+    } on http.ClientException {
+      throw const LoginException('Не удалось подключиться к серверу');
+    }
+    if (response.statusCode == 401) {
+      throw const LoginException(
+        'Неверный номер телефона или код восстановления',
+      );
+    }
+    if (response.statusCode == 422) {
+      throw const LoginException('Проверьте номер, код и новый пароль');
+    }
+    if (response.statusCode == 429) {
+      throw const LoginException('Слишком много попыток. Попробуйте позже');
+    }
+    if (response.statusCode != 200) {
+      throw const LoginException(
+        'Не удалось изменить пароль. Попробуйте позже',
+      );
+    }
+  }
+
   Future<http.Response> _get(String path, {bool authenticated = false}) async {
     final token = authenticated ? await tokens.read() : null;
     final response = await client

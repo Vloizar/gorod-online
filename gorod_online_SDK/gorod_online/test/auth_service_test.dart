@@ -106,6 +106,31 @@ void main() {
       throwsA(isA<ConsentChangedException>()),
     );
   });
+  test(
+    'sends phone, recovery code and new password to the reset endpoint',
+    () async {
+      final auth = AuthService(
+        baseUrl: 'https://example.test',
+        client: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/password/reset');
+          expect(jsonDecode(request.body), {
+            'phone': '+79900000001',
+            'recovery_code': '1234',
+            'password': 'new-password',
+            'password_confirmation': 'new-password',
+          });
+          return http.Response('{"message":"ok"}', 200);
+        }),
+      );
+
+      await auth.resetPassword(
+        phone: '+79900000001',
+        recoveryCode: '1234',
+        password: 'new-password',
+      );
+    },
+  );
   test('loads open registration cities and the current consent document', () async {
     final auth = AuthService(
       baseUrl: 'https://example.test/',

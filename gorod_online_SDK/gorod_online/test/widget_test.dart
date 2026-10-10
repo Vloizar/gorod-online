@@ -102,6 +102,38 @@ void main() {
     expect(deleteCalls, 1);
     expect(tokens.token, isNull);
   });
+  testWidgets('forgot password opens and submits the recovery form', (
+    tester,
+  ) async {
+    var resetCalled = false;
+    final auth = AuthService(
+      baseUrl: 'https://example.test',
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/password/reset');
+        expect(request.method, 'POST');
+        resetCalled = true;
+        return http.Response('{"message":"ok"}', 200);
+      }),
+    );
+    await tester.pumpWidget(MaterialApp(home: LoginPage(authService: auth)));
+    await tester.tap(find.text('Забыли пароль?'));
+    await tester.pumpAndSettle();
+    expect(find.text('Восстановление пароля'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(0), '9000000001');
+    await tester.enterText(find.byType(TextField).at(1), '1234');
+    await tester.enterText(find.byType(TextField).at(2), 'new-password');
+    await tester.enterText(find.byType(TextField).at(3), 'new-password');
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Изменить пароль'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(resetCalled, isTrue);
+    expect(find.text('Пароль изменён'), findsOneWidget);
+    await tester.tap(find.text('Понятно'));
+    await tester.pumpAndSettle();
+    expect(find.text('Войти'), findsOneWidget);
+  });
   testWidgets('shows auth error and enables retry', (tester) async {
     final auth = AuthService(
       baseUrl: 'https://example.test',
