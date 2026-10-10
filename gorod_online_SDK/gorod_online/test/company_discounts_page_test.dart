@@ -51,17 +51,15 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: CompanyDiscountsPage(authService: auth)),
+        MaterialApp(
+          home: CompanyDiscountsPage(authService: auth, initialCode: '123456'),
+        ),
       );
       await tester.pumpAndSettle();
       expect(
         find.text('Вы пока не подключили дисконты компаний.'),
         findsOneWidget,
       );
-      await tester.enterText(find.byType(TextField), '123456');
-      await tester.tap(find.text('Показать компанию'));
-      await tester.pumpAndSettle();
-
       expect(find.text('Вас приглашает: Мария Соколова'), findsOneWidget);
       expect(find.text('В вашем городе нет этой компании'), findsOneWidget);
       expect(find.text('ул. Центральная, 1'), findsOneWidget);

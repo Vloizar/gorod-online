@@ -18,6 +18,67 @@ http.Response utf8Response(String body, int statusCode) => http.Response.bytes(
 );
 
 void main() {
+  testWidgets('shows an invitation reminder on the login screen', (
+    tester,
+  ) async {
+    final auth = AuthService(
+      baseUrl: 'https://example.test',
+      client: MockClient((_) async => http.Response('{}', 500)),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(authService: auth, initialInvitationCode: '123456'),
+      ),
+    );
+    expect(
+      find.textContaining('Вам отправили приглашение в компанию'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('opens the pending company invitation after login', (
+    tester,
+  ) async {
+    final auth = AuthService(
+      baseUrl: 'https://example.test',
+      tokens: MemoryTokens(),
+      client: MockClient((request) async {
+        if (request.url.path == '/api/login') {
+          return utf8Response(
+            '{"token":"session-token","token_type":"Bearer"}',
+            200,
+          );
+        }
+        if (request.url.path == '/api/user') {
+          return utf8Response('{"name":"Андрей","phone":"+79991234567"}', 200);
+        }
+        if (request.url.path == '/api/companies/memberships') {
+          return utf8Response('{"data":[]}', 200);
+        }
+        if (request.url.path == '/api/companies/invitation-preview') {
+          expect(jsonDecode(request.body)['code'], '123456');
+          return utf8Response(
+            '{"company":{"name":"Тёплый угол"},"accepting_members":true,"stores":[]}',
+            200,
+          );
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(authService: auth, initialInvitationCode: '123456'),
+      ),
+    );
+    await tester.enterText(find.byType(TextField).at(0), '+79991234567');
+    await tester.enterText(find.byType(TextField).at(1), 'password');
+    await tester.tap(find.text('Войти'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Тёплый угол'), findsOneWidget);
+  });
+
   testWidgets('empty fields do not send a request', (tester) async {
     var calls = 0;
     final auth = AuthService(

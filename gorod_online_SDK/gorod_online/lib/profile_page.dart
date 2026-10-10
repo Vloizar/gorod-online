@@ -4,9 +4,16 @@ import 'auth_service.dart';
 import 'company_discounts_page.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key, required this.authService});
+  const ProfilePage({
+    super.key,
+    required this.authService,
+    this.initialInvitationCode,
+    this.onAccountDeleted,
+  });
 
   final AuthService authService;
+  final String? initialInvitationCode;
+  final VoidCallback? onAccountDeleted;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -22,6 +29,20 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     loadProfile();
+    final code = widget.initialInvitationCode;
+    if (code != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => CompanyDiscountsPage(
+              authService: widget.authService,
+              initialCode: code,
+            ),
+          ),
+        );
+      });
+    }
   }
 
   Future<void> loadProfile() async {
@@ -68,6 +89,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       await widget.authService.deleteAccount();
       if (!mounted) return;
+      widget.onAccountDeleted?.call();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Учётная запись удалена')));

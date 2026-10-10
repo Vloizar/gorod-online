@@ -140,8 +140,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         );
         if (!mounted) return;
       }
-      showMessage('Регистрация завершена');
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } on LoginException catch (error) {
       if (mounted) showMessage(error.message);
     } catch (_) {

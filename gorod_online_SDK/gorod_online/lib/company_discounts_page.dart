@@ -5,9 +5,14 @@ import 'package:latlong2/latlong.dart';
 import 'auth_service.dart';
 
 class CompanyDiscountsPage extends StatefulWidget {
-  const CompanyDiscountsPage({super.key, required this.authService});
+  const CompanyDiscountsPage({
+    super.key,
+    required this.authService,
+    this.initialCode,
+  });
 
   final AuthService authService;
+  final String? initialCode;
 
   @override
   State<CompanyDiscountsPage> createState() => _CompanyDiscountsPageState();
@@ -26,6 +31,10 @@ class _CompanyDiscountsPageState extends State<CompanyDiscountsPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialCode != null) {
+      codeController.text = widget.initialCode!;
+      WidgetsBinding.instance.addPostFrameCallback((_) => inspectInvitation());
+    }
     loadMemberships();
   }
 
