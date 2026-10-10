@@ -298,8 +298,8 @@ class RussianPhoneFormatter extends TextInputFormatter {
     TextEditingValue newValue,
   ) {
     var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    if (digits.length > 10 && digits.startsWith('7'))
-      digits = digits.substring(1);
+    final pastedCountryCode = digits.length > 10 && digits.startsWith('7');
+    if (pastedCountryCode) digits = digits.substring(1);
     final limited = digits.length > 10 ? digits.substring(0, 10) : digits;
     final chunks = <String>[];
     var remaining = limited;
@@ -310,9 +310,38 @@ class RussianPhoneFormatter extends TextInputFormatter {
       remaining = remaining.substring(take);
     }
     final formatted = chunks.join(' ');
+    int digitCountBefore(int offset) {
+      final safeOffset = offset.clamp(0, newValue.text.length).toInt();
+      var count = newValue.text
+          .substring(0, safeOffset)
+          .replaceAll(RegExp(r'\D'), '')
+          .length;
+      if (pastedCountryCode && safeOffset > 0) count--;
+      return count.clamp(0, limited.length).toInt();
+    }
+
+    int offsetForDigitCount(int count) {
+      if (count == 0) return 0;
+      var seen = 0;
+      var offset = 0;
+      while (offset < formatted.length && seen < count) {
+        if (RegExp(r'\d').hasMatch(formatted[offset])) seen++;
+        offset++;
+      }
+      if (offset < formatted.length && formatted[offset] == ' ') offset++;
+      return offset;
+    }
+
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
+      selection: TextSelection(
+        baseOffset: offsetForDigitCount(
+          digitCountBefore(newValue.selection.baseOffset),
+        ),
+        extentOffset: offsetForDigitCount(
+          digitCountBefore(newValue.selection.extentOffset),
+        ),
+      ),
     );
   }
 }
