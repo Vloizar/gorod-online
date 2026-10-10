@@ -109,38 +109,39 @@ class _RegistrationPageState extends State<RegistrationPage> {
     }
     setState(() => submitting = true);
     try {
-      await widget.authService.register(
-        name: nameController.text,
-        phone: '+7${phoneController.text.replaceAll(RegExp(r'\D'), '')}',
-        cityId: cityId,
-        password: passwordController.text,
-        recoveryCode: recoveryCodeController.text,
-        consent: document,
-      );
-      if (!mounted) return;
-      showMessage('Регистрация завершена');
-      Navigator.of(context).pop();
-    } on ConsentChangedException {
+      var consentWasUpdated = false;
       try {
+        await submitRegistration(document, cityId);
+      } on ConsentChangedException {
         final updatedDocument = await widget.authService.personalDataConsent();
         if (!mounted) return;
-        setState(() {
-          consent = updatedDocument;
-          consentAccepted = false;
-        });
-        await showConsent();
-        if (mounted) {
-          showMessage(
-            'Прочитайте обновлённое согласие и подтвердите его, чтобы продолжить регистрацию',
-          );
-        }
-      } on LoginException catch (error) {
-        if (mounted) showMessage(error.message);
-      } catch (_) {
-        if (mounted) {
-          showMessage('Не удалось загрузить обновлённое согласие');
-        }
+        setState(() => consent = updatedDocument);
+        consentWasUpdated = true;
+        await submitRegistration(updatedDocument, cityId);
       }
+      if (!mounted) return;
+      if (consentWasUpdated) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Согласие обновлено'),
+            content: const Text(
+              'Текст согласия обновился во время регистрации. '
+              'Регистрация продолжена, повторно подтверждать согласие не нужно. '
+              'Это сообщение показывается в приложении без push-уведомления.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Понятно'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+      }
+      showMessage('Регистрация завершена');
+      Navigator.of(context).pop();
     } on LoginException catch (error) {
       if (mounted) showMessage(error.message);
     } catch (_) {
@@ -150,6 +151,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (mounted) setState(() => submitting = false);
     }
   }
+
+  Future<void> submitRegistration(ConsentDocument document, int cityId) =>
+      widget.authService.register(
+        name: nameController.text,
+        phone: '+7${phoneController.text.replaceAll(RegExp(r'\D'), '')}',
+        cityId: cityId,
+        password: passwordController.text,
+        recoveryCode: recoveryCodeController.text,
+        consent: document,
+      );
 
   void showMessage(String value) {
     ScaffoldMessenger.of(context)
