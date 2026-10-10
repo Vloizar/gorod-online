@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['region_name', 'district_name', 'name', 'registration_open'])]
 class City extends Model
 {
+    protected $appends = ['display_name'];
+
     protected function casts(): array
     {
         return [

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 abstract class TokenStore {
   Future<void> save(String token);
   Future<String?> read();
+  Future<void> delete();
 }
 
 class SecureTokenStore implements TokenStore {
@@ -17,6 +18,9 @@ class SecureTokenStore implements TokenStore {
       storage.write(key: 'access_token', value: token);
   @override
   Future<String?> read() => storage.read(key: 'access_token');
+
+  @override
+  Future<void> delete() => storage.delete(key: 'access_token');
 }
 
 class LoginException implements Exception {
@@ -217,11 +221,59 @@ class AuthService {
     }
   }
 
-  Future<http.Response> _get(String path) async {
+  Future<http.Response> _get(String path, {bool authenticated = false}) async {
+    final token = authenticated ? await tokens.read() : null;
     final response = await client
-        .get(_endpoint(path), headers: {'Accept': 'application/json'})
+        .get(
+          _endpoint(path),
+          headers: {
+            'Accept': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        )
         .timeout(timeout);
     return response;
+  }
+
+  Future<Map<String, dynamic>> profile() async {
+    final response = await _get('/api/user', authenticated: true);
+    if (response.statusCode == 401) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    if (response.statusCode != 200) {
+      throw const LoginException('Не удалось загрузить профиль');
+    }
+    return _decodeMap(response.body);
+  }
+
+  Future<void> deleteAccount() async {
+    final token = await tokens.read();
+    if (token == null) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    late http.Response response;
+    try {
+      response = await client
+          .delete(
+            _endpoint('/api/user'),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const LoginException('Сервер не ответил. Проверьте статус позже');
+    } on http.ClientException {
+      throw const LoginException('Не удалось подключиться к серверу');
+    }
+    if (response.statusCode == 401) {
+      throw const LoginException('Сеанс завершён. Войдите снова');
+    }
+    if (response.statusCode != 200) {
+      throw const LoginException('Не удалось удалить учётную запись');
+    }
+    await tokens.delete();
   }
 
   Uri _endpoint(String path) {

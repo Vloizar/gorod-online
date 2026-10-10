@@ -6,6 +6,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:gorod_online/auth_service.dart';
 
+http.Response utf8Response(String body, int statusCode) => http.Response.bytes(
+  utf8.encode(body),
+  statusCode,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
+
 class MemoryTokens implements TokenStore {
   String? token;
   bool fail = false;
@@ -17,6 +23,9 @@ class MemoryTokens implements TokenStore {
 
   @override
   Future<String?> read() async => token;
+
+  @override
+  Future<void> delete() async => token = null;
 }
 
 void main() {
@@ -45,12 +54,42 @@ void main() {
       'Authorization': 'Bearer test-token',
     });
   });
+  test(
+    'loads authenticated profile and deletes account and local token',
+    () async {
+      final tokens = MemoryTokens()..token = 'session-token';
+      var profileLoaded = false;
+      var accountDeleted = false;
+      final auth = AuthService(
+        baseUrl: 'https://example.test',
+        tokens: tokens,
+        client: MockClient((request) async {
+          expect(request.headers['Authorization'], 'Bearer session-token');
+          if (request.method == 'GET') {
+            expect(request.url.path, '/api/user');
+            profileLoaded = true;
+            return utf8Response('{"id":1,"name":"Андрей"}', 200);
+          }
+          expect(request.method, 'DELETE');
+          expect(request.url.path, '/api/user');
+          accountDeleted = true;
+          return http.Response('{"message":"deleted"}', 200);
+        }),
+      );
+
+      expect((await auth.profile())['name'], 'Андрей');
+      await auth.deleteAccount();
+      expect(profileLoaded, isTrue);
+      expect(accountDeleted, isTrue);
+      expect(tokens.token, isNull);
+    },
+  );
   test('loads open registration cities and the current consent document', () async {
     final auth = AuthService(
       baseUrl: 'https://example.test/',
       client: MockClient((request) async {
         if (request.url.path == '/api/cities') {
-          return http.Response(
+          return utf8Response(
             '{"data":[{"id":7,"display_name":"Мостовской, Мостовской район"}]}',
             200,
           );

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\DeleteAccountController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
@@ -17,5 +18,6 @@ Route::post('/password/reset', ResetPasswordController::class)
     ->name('password.reset');
 
 Route::get('/user', function (Request $request) {
-    return $request->user();
+    return $request->user()->load('city');
 })->middleware('auth:sanctum');
+Route::delete('/user', DeleteAccountController::class)->middleware('auth:sanctum')->name('user.delete');

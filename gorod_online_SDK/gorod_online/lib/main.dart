@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_service.dart';
+import 'profile_page.dart';
 import 'registration_page.dart';
 
 void main() {
@@ -51,7 +52,9 @@ class _LoginPageState extends State<LoginPage> {
       await auth.login(phoneController.text, passwordController.text);
       if (!mounted) return;
       passwordController.clear();
-      showMessage('Вход выполнен');
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => ProfilePage(authService: auth)),
+      );
     } on LoginException catch (error) {
       if (mounted) showMessage(error.message);
     } catch (_) {

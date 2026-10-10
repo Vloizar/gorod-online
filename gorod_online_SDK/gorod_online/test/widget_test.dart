@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,8 +7,15 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:gorod_online/auth_service.dart';
 import 'package:gorod_online/main.dart';
+import 'package:gorod_online/profile_page.dart';
 
 import 'auth_service_test.dart' show MemoryTokens;
+
+http.Response utf8Response(String body, int statusCode) => http.Response.bytes(
+  utf8.encode(body),
+  statusCode,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
 
 void main() {
   testWidgets('empty fields do not send a request', (tester) async {
@@ -34,9 +42,12 @@ void main() {
     final auth = AuthService(
       baseUrl: 'https://example.test',
       tokens: tokens,
-      client: MockClient((_) {
+      client: MockClient((request) {
         calls++;
-        return response.future;
+        if (request.method == 'POST') return response.future;
+        return Future.value(
+          utf8Response('{"id":1,"name":"Андрей","phone":"+79991234567"}', 200),
+        );
       }),
     );
     await tester.pumpWidget(MaterialApp(home: LoginPage(authService: auth)));
@@ -53,13 +64,43 @@ void main() {
       http.Response('{"token":"x","token_type":"Bearer"}', 200),
     );
     await tester.pumpAndSettle();
-    expect(calls, 1);
+    expect(calls, 2);
     expect(tokens.token, 'x');
-    expect(find.text('Вход выполнен'), findsOneWidget);
-    expect(
-      tester.widget<TextField>(find.byType(TextField).at(1)).controller!.text,
-      isEmpty,
+    expect(find.text('Профиль'), findsOneWidget);
+    expect(find.text('Андрей'), findsOneWidget);
+    expect(find.text('Удалить учетную запись'), findsOneWidget);
+  });
+  testWidgets('account deletion requires an explicit confirmation', (
+    tester,
+  ) async {
+    final tokens = MemoryTokens()..token = 'session-token';
+    var deleteCalls = 0;
+    final auth = AuthService(
+      baseUrl: 'https://example.test',
+      tokens: tokens,
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return utf8Response('{"id":1,"name":"Андрей"}', 200);
+        }
+        deleteCalls++;
+        return http.Response('{"message":"deleted"}', 200);
+      }),
     );
+    await tester.pumpWidget(MaterialApp(home: ProfilePage(authService: auth)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить учетную запись'));
+    await tester.pumpAndSettle();
+    expect(find.text('Удалить учетную запись?'), findsOneWidget);
+    expect(deleteCalls, 0);
+    await tester.tap(find.text('Отмена'));
+    await tester.pumpAndSettle();
+    expect(deleteCalls, 0);
+    await tester.tap(find.text('Удалить учетную запись'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить').last);
+    await tester.pumpAndSettle();
+    expect(deleteCalls, 1);
+    expect(tokens.token, isNull);
   });
   testWidgets('shows auth error and enables retry', (tester) async {
     final auth = AuthService(
