@@ -124,6 +124,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           label: 'Телефон для входа',
                           value: account?['phone'] as String? ?? '—',
                         ),
+                        _ProfileRow(
+                          label: 'Код участника',
+                          value: account?['member_code'] as String? ?? '—',
+                        ),
                         if (city is Map<String, dynamic>)
                           _ProfileRow(
                             label: 'Город регистрации',

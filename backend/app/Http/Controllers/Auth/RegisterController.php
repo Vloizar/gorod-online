@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Models\PersonalDataConsent;
 use App\Models\User;
+use App\Support\MemberCodeGenerator;
 use App\Support\PersonalDataConsentDocument;
 use App\Support\RecoveryCodeHasher;
 use Illuminate\Http\JsonResponse;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class RegisterController extends Controller
 {
-    public function __invoke(RegisterRequest $request): JsonResponse
+    public function __invoke(RegisterRequest $request, MemberCodeGenerator $memberCodes): JsonResponse
     {
         $document = PersonalDataConsentDocument::current();
 
@@ -31,12 +32,13 @@ class RegisterController extends Controller
             ], 409);
         }
 
-        $user = DB::transaction(function () use ($data, $document, $request): User {
+        $user = DB::transaction(function () use ($data, $document, $request, $memberCodes): User {
             $user = User::create([
                 'name' => $data['name'],
                 'phone' => $data['phone'],
                 'city_id' => $data['city_id'],
                 'password' => $data['password'],
+                'member_code' => $memberCodes->generate(),
             ]);
 
             $user->forceFill([

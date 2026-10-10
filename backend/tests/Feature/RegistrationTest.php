@@ -75,8 +75,12 @@ class RegistrationTest extends TestCase
             ]))->assertCreated()
                 ->assertJsonPath('user.phone', '+79900000001')
                 ->assertJsonPath('user.city_id', $this->openCity->id)
+                ->assertJsonStructure(['user' => ['member_code']])
                 ->assertJsonMissingPath('user.password')
                 ->assertJsonMissingPath('user.recovery_code_hash');
+
+            $memberCode = $response->json('user.member_code');
+            $this->assertMatchesRegularExpression('/^[АБВГДЕЖИКЛМНПРСТУЮЯ][0-9]{5}$/u', $memberCode);
 
             $this->assertDatabaseHas('personal_data_consents', [
                 'user_id' => $response->json('user.id'),
